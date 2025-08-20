@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Contagem de Produtos</title>
+    <!-- Tailwind CSS para um design responsivo e moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 1000px;
+        }
+        input, select, button {
+            transition: all 0.2s;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-start justify-center min-h-screen p-4">
+
+    <div class="container bg-white p-6 rounded-xl shadow-lg mt-8 w-full">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Contagem de Produtos</h1>
+
+        <!-- Conteúdo da seção de contagem -->
+        <div id="contagem-section" class="tab-content">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Registro da Contagem</h2>
+            <form id="contagem-form" class="space-y-4">
+                <div>
+                    <label for="codigo" class="block text-sm font-medium text-gray-700">Código do Produto</label>
+                    <input type="text" id="codigo" name="codigo" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                </div>
+                <div>
+                    <label for="localizacao" class="block text-sm font-medium text-gray-700">Localização (Ex: Corredor A, Prateleira 2)</label>
+                    <input type="text" id="localizacao" name="localizacao" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                </div>
+                <div>
+                    <label for="quantidade" class="block text-sm font-medium text-gray-700">Quantidade Contada</label>
+                    <input type="number" id="quantidade" name="quantidade" required
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit"
+                            class="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Salvar Contagem
+                    </button>
+                </div>
+            </form>
+            <hr class="my-6 border-gray-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-700">Minhas Contagens</h3>
+                <div class="flex space-x-2">
+                    <button id="exportar-contagem"
+                            class="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                        Exportar Minha Contagem (.xlsx)
+                    </button>
+                    <button id="limpar-minha-contagem"
+                            class="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        Limpar Minha Contagem
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white rounded-md shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Localização</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contagens-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Linhas de contagem serão inseridas aqui via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-80">
+            <h3 class="text-lg font-bold">Confirmação</h3>
+            <p id="modal-text" class="mt-2 mb-4 text-sm text-gray-600">Deseja realmente limpar sua contagem parcial? Esta ação é irreversível.</p>
+            <div class="flex justify-end space-x-2">
+                <button id="modal-cancel-btn" class="py-2 px-4 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300">Cancelar</button>
+                <button id="modal-confirm-btn" class="py-2 px-4 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Biblioteca para manipulação de arquivos XLSX -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Variáveis Globais ---
+            let db;
+            const DB_NAME = 'inventarioDB';
+            const DB_VERSION = 1;
+            const STORE_CONTATO = 'contagens';
+
+            // --- Lógica de IndexedDB ---
+            const initDb = () => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onerror = (event) => {
+                    console.error('Erro ao abrir o banco de dados:', event.target.errorCode);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_CONTATO)) {
+                        db.createObjectStore(STORE_CONTATO, { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    console.log('Banco de dados aberto com sucesso!');
+                    loadContagensTable();
+                };
+            };
+
+            const addContagem = (data) => {
+                const transaction = db.transaction([STORE_CONTATO], 'readwrite');
+                const store = transaction.objectStore(STORE_CONTATO);
+                const request = store.add(data);
+
+                request.onsuccess = () => {
+                    console.log('Contagem salva com sucesso!');
+                    loadContagensTable();
+                };
+                request.onerror = (event) => {
+                    console.error('Erro ao salvar contagem:', event.target.error);
+                };
+            };
+
+            const deleteContagem = (id) => {
+                const transaction = db.transaction([STORE_CONTATO], 'readwrite');
+                const store = transaction.objectStore(STORE_CONTATO);
+                const request = store.delete(id);
+                request.onsuccess = () => {
+                    console.log('Contagem deletada:', id);
+                    loadContagensTable();
+                };
+                request.onerror = (event) => {
+                    console.error('Erro ao deletar contagem:', event.target.error);
+                };
+            };
+            
+            // Função para limpar apenas as contagens do usuário
+            const clearUserContagens = () => {
+                const transaction = db.transaction([STORE_CONTATO], 'readwrite');
+                const store = transaction.objectStore(STORE_CONTATO);
+                
+                store.clear();
+
+                transaction.oncomplete = () => {
+                    console.log('Contagens do usuário limpas com sucesso.');
+                    loadContagensTable();
+                };
+                transaction.onerror = (event) => {
+                    console.error('Erro ao limpar as contagens do usuário:', event.target.error);
+                };
+            };
+            
+            // --- Lógica de Interface (UI) e Eventos ---
+            document.getElementById('contagem-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const codigo = document.getElementById('codigo').value.toUpperCase().trim();
+                const localizacao = document.getElementById('localizacao').value.trim();
+                const quantidade = parseInt(document.getElementById('quantidade').value, 10);
+
+                if (codigo && localizacao && !isNaN(quantidade)) {
+                    addContagem({ codigo, localizacao, quantidade });
+                    e.target.reset();
+                }
+            });
+
+            const loadContagensTable = () => {
+                const transaction = db.transaction([STORE_CONTATO], 'readonly');
+                const store = transaction.objectStore(STORE_CONTATO);
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const contagens = request.result;
+                    const tableBody = document.getElementById('contagens-table-body');
+                    tableBody.innerHTML = '';
+                    if (contagens.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">Nenhuma contagem registrada.</td></tr>';
+                    } else {
+                        contagens.forEach(item => {
+                            const row = `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.codigo}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.localizacao}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.quantidade}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button class="text-red-600 hover:text-red-900 delete-btn" data-id="${item.id}">Excluir</button>
+                                    </td>
+                                </tr>
+                            `;
+                            tableBody.innerHTML += row;
+                        });
+                        document.querySelectorAll('.delete-btn').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                const id = parseInt(e.target.dataset.id, 10);
+                                deleteContagem(id);
+                            });
+                        });
+                    }
+                };
+            };
+
+            const exportData = (data, filename) => {
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Contagem");
+                XLSX.writeFile(wb, filename);
+            };
+
+            document.getElementById('exportar-contagem').addEventListener('click', () => {
+                const transaction = db.transaction([STORE_CONTATO], 'readonly');
+                const store = transaction.objectStore(STORE_CONTATO);
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const contagens = request.result.map(({ id, ...rest }) => rest);
+                    if (contagens.length > 0) {
+                        const filename = `contagem_${Date.now()}.xlsx`;
+                        exportData(contagens, filename);
+                    } else {
+                        // Substituído alert() por uma mensagem na UI
+                        const statusMessage = document.createElement('div');
+                        statusMessage.textContent = 'Nenhuma contagem para exportar!';
+                        statusMessage.className = 'text-red-500 text-sm mt-2';
+                        document.getElementById('contagem-section').appendChild(statusMessage);
+                        setTimeout(() => statusMessage.remove(), 3000);
+                    }
+                };
+            });
+
+            // Lógica do Modal de Confirmação
+            const modal = document.getElementById('modal');
+            const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+            const modalCancelBtn = document.getElementById('modal-cancel-btn');
+            const modalText = document.getElementById('modal-text');
+            
+            let modalAction;
+            
+            // Novo evento para o botão de limpar contagem
+            document.getElementById('limpar-minha-contagem').addEventListener('click', () => {
+                modalText.textContent = "Deseja realmente limpar sua contagem parcial? Esta ação é irreversível.";
+                modalAction = clearUserContagens;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            });
+
+            modalConfirmBtn.addEventListener('click', () => {
+                modalAction();
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+
+            modalCancelBtn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+
+            // Inicialização do Banco de Dados
+            initDb();
+        });
+    </script>
+</body>
+</html>
