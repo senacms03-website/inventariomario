@@ -132,6 +132,18 @@
             let contagens = JSON.parse(localStorage.getItem('minhasContagens')) || [];
             let modalAction = null;
 
+            // Contador de exportações
+            let exportCount = 0;
+
+            // Função para gerar nome único
+            function gerarNomeArquivo(extensao) {
+                exportCount++;
+                const agora = new Date();
+                const dataHora = agora.toISOString().replace(/[-T:.Z]/g, "").slice(0,14);
+                const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                return `contagem_${exportCount}_${randomCode}_${dataHora}.${extensao}`;
+            }
+
             function renderContagens() {
                 contagensTableBody.innerHTML = '';
                 contagens.forEach((item, index) => {
@@ -205,7 +217,7 @@
                 const worksheet = XLSX.utils.json_to_sheet(dataToExport);
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, 'Contagem de Produtos');
-                XLSX.writeFile(workbook, `contagem_produtos.xlsx`);
+                XLSX.writeFile(workbook, gerarNomeArquivo("xlsx"));
             });
 
             exportarContagemPdfBtn.addEventListener('click', () => {
@@ -214,7 +226,7 @@
                 const doc = new jsPDF();
                 const tableData = contagens.map(item => [item.codigo, item.nomeProduto, item.descricaoProduto, item.localizacao, item.quantidade]);
                 doc.autoTable({ head: [['Código','Nome','Descrição','Localização','Qtd']], body: tableData });
-                doc.save('contagem_produtos.pdf');
+                doc.save(gerarNomeArquivo("pdf"));
             });
 
             renderContagens();
